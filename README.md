@@ -20,6 +20,9 @@ bun src/index.ts sync
 
 # Show stats
 bun src/index.ts stats
+
+# Help
+bun src/index.ts --help
 ```
 
 ### Commands
@@ -41,6 +44,8 @@ bun src/index.ts stats
 ```sql
 sessions (id, project_path, git_branch, cwd, first_timestamp, last_timestamp, summary)
 messages (uuid, session_id, parent_uuid, type, model, content_text, content_json, thinking, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
+tool_calls (id, message_uuid, session_id, tool_name, tool_input, timestamp)
+tool_results (id, tool_call_id, message_uuid, session_id, content, is_error, timestamp)
 sync_state (file_path, last_modified, last_byte_offset)
 ```
 
@@ -66,6 +71,38 @@ FROM messages
 WHERE model IS NOT NULL
 GROUP BY model
 ORDER BY count DESC;
+
+-- Tool usage breakdown
+SELECT tool_name, COUNT(*) as count
+FROM tool_calls
+GROUP BY tool_name
+ORDER BY count DESC;
+
+-- Files read in a session
+SELECT tc.tool_name, json_extract(tc.tool_input, '$.file_path') as file
+FROM tool_calls tc
+WHERE tc.tool_name = 'Read' AND tc.session_id = 'your-session-id';
+
+-- Code changes (edits) with before/after
+SELECT
+  json_extract(tc.tool_input, '$.file_path') as file,
+  json_extract(tc.tool_input, '$.old_string') as old,
+  json_extract(tc.tool_input, '$.new_string') as new
+FROM tool_calls tc
+WHERE tc.tool_name = 'Edit';
+
+-- Session cost estimate (Opus 4.5)
+SELECT
+  s.project_path,
+  SUM(m.input_tokens) / 1000000.0 * 15 +
+  SUM(m.output_tokens) / 1000000.0 * 75 +
+  SUM(m.cache_read_tokens) / 1000000.0 * 1.5 +
+  SUM(m.cache_creation_tokens) / 1000000.0 * 18.75 as cost_usd
+FROM sessions s
+JOIN messages m ON m.session_id = s.id
+WHERE m.model LIKE '%opus%'
+GROUP BY s.id
+ORDER BY cost_usd DESC;
 ```
 
 ## License
