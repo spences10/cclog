@@ -67,6 +67,14 @@ export class Database {
 		this.db.run('COMMIT');
 	}
 
+	disable_foreign_keys() {
+		this.db.run('PRAGMA foreign_keys = OFF');
+	}
+
+	enable_foreign_keys() {
+		this.db.run('PRAGMA foreign_keys = ON');
+	}
+
 	upsert_session(session: {
 		id: string;
 		project_path: string;
@@ -212,6 +220,10 @@ export class Database {
 			tool_results: tool_results.count,
 			tokens,
 		};
+	}
+
+	reset_sync_state() {
+		this.db.run('DELETE FROM sync_state');
 	}
 
 	close() {

@@ -27,6 +27,15 @@ export async function sync(
 		tool_results_added: 0,
 	};
 
+	// Auto-migration: if messages exist but no tool_calls, reset sync state
+	const stats = db.get_stats();
+	if (stats.messages > 0 && stats.tool_calls === 0) {
+		console.log(
+			'Migrating: resetting sync state to populate tool_calls...',
+		);
+		db.reset_sync_state();
+	}
+
 	const glob = new Bun.Glob('**/*.jsonl');
 	const files: string[] = [];
 	for await (const file of glob.scan({
@@ -42,6 +51,7 @@ export async function sync(
 	const seen_sessions = new Set<string>();
 	let file_idx = 0;
 
+	db.disable_foreign_keys();
 	db.begin();
 
 	for (const file_path of files) {
@@ -103,6 +113,32 @@ export async function sync(
 
 			db.insert_message(message);
 			file_messages_added++;
+
+			// Insert tool calls
+			for (const tool_call of message.tool_calls) {
+				db.insert_tool_call({
+					id: tool_call.id,
+					message_uuid: message.uuid,
+					session_id: message.session_id,
+					tool_name: tool_call.tool_name,
+					tool_input: tool_call.tool_input,
+					timestamp: message.timestamp,
+				});
+				result.tool_calls_added++;
+			}
+
+			// Insert tool results
+			for (const tool_result of message.tool_results) {
+				db.insert_tool_result({
+					tool_call_id: tool_result.tool_call_id,
+					message_uuid: message.uuid,
+					session_id: message.session_id,
+					content: tool_result.content,
+					is_error: tool_result.is_error,
+					timestamp: message.timestamp,
+				});
+				result.tool_results_added++;
+			}
 		}
 
 		if (file_messages_added > 0) {
@@ -114,6 +150,7 @@ export async function sync(
 	}
 
 	db.commit();
+	db.enable_foreign_keys();
 
 	if (files.length >= 100) {
 		console.log(); // newline after progress
