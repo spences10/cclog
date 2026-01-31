@@ -67,6 +67,47 @@ CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_name ON tool_calls(tool_name);
 CREATE INDEX IF NOT EXISTS idx_tool_results_session ON tool_results(session_id);
 CREATE INDEX IF NOT EXISTS idx_tool_results_call ON tool_results(tool_call_id);
+
+-- Team/Swarm tracking tables
+CREATE TABLE IF NOT EXISTS teams (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  lead_session_id TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (lead_session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  agent_type TEXT,
+  model TEXT,
+  prompt TEXT,
+  color TEXT,
+  cwd TEXT,
+  joined_at INTEGER NOT NULL,
+  FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_tasks (
+  id TEXT PRIMARY KEY,
+  team_id TEXT NOT NULL,
+  owner_name TEXT,
+  subject TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at INTEGER,
+  completed_at INTEGER,
+  FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_teams_name ON teams(name);
+CREATE INDEX IF NOT EXISTS idx_teams_lead_session ON teams(lead_session_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_team ON team_tasks(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_status ON team_tasks(status);
 `;
 
 export class Database {
@@ -77,6 +118,9 @@ export class Database {
 	private stmt_insert_tool_result: Statement;
 	private stmt_get_sync_state: Statement;
 	private stmt_set_sync_state: Statement;
+	private stmt_upsert_team: Statement;
+	private stmt_upsert_team_member: Statement;
+	private stmt_upsert_team_task: Statement;
 
 	constructor(db_path = DEFAULT_DB_PATH) {
 		this.db = new BunDB(db_path);
@@ -119,6 +163,31 @@ export class Database {
 			ON CONFLICT(file_path) DO UPDATE SET
 				last_modified = excluded.last_modified,
 				last_byte_offset = excluded.last_byte_offset
+		`);
+
+		this.stmt_upsert_team = this.db.prepare(`
+			INSERT INTO teams (id, name, description, lead_session_id, created_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				description = COALESCE(excluded.description, description),
+				lead_session_id = COALESCE(excluded.lead_session_id, lead_session_id)
+		`);
+
+		this.stmt_upsert_team_member = this.db.prepare(`
+			INSERT INTO team_members (id, team_id, name, agent_type, model, prompt, color, cwd, joined_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				prompt = COALESCE(excluded.prompt, prompt),
+				model = COALESCE(excluded.model, model)
+		`);
+
+		this.stmt_upsert_team_task = this.db.prepare(`
+			INSERT INTO team_tasks (id, team_id, owner_name, subject, description, status, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				status = excluded.status,
+				owner_name = COALESCE(excluded.owner_name, owner_name),
+				completed_at = COALESCE(excluded.completed_at, completed_at)
 		`);
 	}
 
@@ -245,6 +314,68 @@ export class Database {
 		);
 	}
 
+	upsert_team(team: {
+		id: string;
+		name: string;
+		description?: string;
+		lead_session_id?: string;
+		created_at: number;
+	}) {
+		this.stmt_upsert_team.run(
+			team.id,
+			team.name,
+			team.description ?? null,
+			team.lead_session_id ?? null,
+			team.created_at,
+		);
+	}
+
+	upsert_team_member(member: {
+		id: string;
+		team_id: string;
+		name: string;
+		agent_type?: string;
+		model?: string;
+		prompt?: string;
+		color?: string;
+		cwd?: string;
+		joined_at: number;
+	}) {
+		this.stmt_upsert_team_member.run(
+			member.id,
+			member.team_id,
+			member.name,
+			member.agent_type ?? null,
+			member.model ?? null,
+			member.prompt ?? null,
+			member.color ?? null,
+			member.cwd ?? null,
+			member.joined_at,
+		);
+	}
+
+	upsert_team_task(task: {
+		id: string;
+		team_id: string;
+		owner_name?: string;
+		subject: string;
+		description?: string;
+		status?: string;
+		created_at?: number;
+		completed_at?: number;
+	}) {
+		this.stmt_upsert_team_task.run(
+			task.id,
+			task.team_id,
+			task.owner_name ?? null,
+			task.subject,
+			task.description ?? null,
+			task.status ?? 'pending',
+			task.created_at ?? null,
+			task.completed_at ?? null,
+		);
+	}
+
 	get_stats() {
 		const sessions = this.db
 			.prepare('SELECT COUNT(*) as count FROM sessions')
@@ -257,6 +388,15 @@ export class Database {
 			.get() as { count: number };
 		const tool_results = this.db
 			.prepare('SELECT COUNT(*) as count FROM tool_results')
+			.get() as { count: number };
+		const teams = this.db
+			.prepare('SELECT COUNT(*) as count FROM teams')
+			.get() as { count: number };
+		const team_members = this.db
+			.prepare('SELECT COUNT(*) as count FROM team_members')
+			.get() as { count: number };
+		const team_tasks = this.db
+			.prepare('SELECT COUNT(*) as count FROM team_tasks')
 			.get() as { count: number };
 		const tokens = this.db
 			.prepare(
@@ -281,6 +421,9 @@ export class Database {
 			messages: messages.count,
 			tool_calls: tool_calls.count,
 			tool_results: tool_results.count,
+			teams: teams.count,
+			team_members: team_members.count,
+			team_tasks: team_tasks.count,
 			tokens,
 		};
 	}

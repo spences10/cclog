@@ -63,10 +63,10 @@ bun src/index.ts stats
 
 ### Commands
 
-| Command | Description                       |
-| ------- | --------------------------------- |
-| `sync`  | Import transcripts (incremental)  |
-| `stats` | Show session/message/token counts |
+| Command | Description                                |
+| ------- | ------------------------------------------ |
+| `sync`  | Import transcripts and teams (incremental) |
+| `stats` | Show session/message/team/token counts     |
 
 ### Options
 
@@ -77,13 +77,112 @@ bun src/index.ts stats
 
 ## Database Schema
 
-```sql
-sessions (id, project_path, git_branch, cwd, first_timestamp, last_timestamp, summary)
-messages (uuid, session_id, parent_uuid, type, model, content_text, content_json, thinking, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
-tool_calls (id, message_uuid, session_id, tool_name, tool_input, timestamp)
-tool_results (id, tool_call_id, message_uuid, session_id, content, is_error, timestamp)
-sync_state (file_path, last_modified, last_byte_offset)
+```mermaid
+erDiagram
+    sessions ||--o{ messages : contains
+    sessions ||--o{ tool_calls : contains
+    sessions ||--o{ tool_results : contains
+    sessions ||--o| teams : "lead session"
+    messages ||--o{ tool_calls : has
+    messages ||--o{ tool_results : has
+    tool_calls ||--o{ tool_results : produces
+    teams ||--o{ team_members : has
+    teams ||--o{ team_tasks : has
+
+    sessions {
+        text id PK
+        text project_path
+        text git_branch
+        text cwd
+        int first_timestamp
+        int last_timestamp
+        text summary
+    }
+
+    messages {
+        text uuid PK
+        text session_id FK
+        text parent_uuid
+        text type
+        text model
+        text content_text
+        text content_json
+        text thinking
+        int timestamp
+        int input_tokens
+        int output_tokens
+        int cache_read_tokens
+        int cache_creation_tokens
+    }
+
+    tool_calls {
+        text id PK
+        text message_uuid FK
+        text session_id FK
+        text tool_name
+        text tool_input
+        int timestamp
+    }
+
+    tool_results {
+        int id PK
+        text tool_call_id FK
+        text message_uuid FK
+        text session_id FK
+        text content
+        int is_error
+        int timestamp
+    }
+
+    teams {
+        text id PK
+        text name
+        text description
+        text lead_session_id FK
+        int created_at
+    }
+
+    team_members {
+        text id PK
+        text team_id FK
+        text name
+        text agent_type
+        text model
+        text prompt
+        text color
+        text cwd
+        int joined_at
+    }
+
+    team_tasks {
+        text id PK
+        text team_id FK
+        text owner_name
+        text subject
+        text description
+        text status
+        int created_at
+        int completed_at
+    }
+
+    sync_state {
+        text file_path PK
+        int last_modified
+        int last_byte_offset
+    }
 ```
+
+### Team/Swarm Support
+
+Syncs team data from `~/.claude/teams/` when Claude Code's swarm mode
+is enabled.
+
+**Why track teams?**
+
+- Debug runaway agents: compare `prompt` (original instructions) vs
+  actual behavior
+- Link swarm runs to sessions and PRs
+- Track task assignments and completion
 
 ## Example Queries
 
@@ -139,6 +238,26 @@ JOIN messages m ON m.session_id = s.id
 WHERE m.model LIKE '%opus%'
 GROUP BY s.id
 ORDER BY cost_usd DESC;
+
+-- Teams with member count
+SELECT t.name, t.description, COUNT(tm.id) as members
+FROM teams t
+LEFT JOIN team_members tm ON tm.team_id = t.id
+GROUP BY t.id;
+
+-- Agent prompts for debugging (what were they told to do?)
+SELECT name, prompt FROM team_members WHERE team_id = 'your-team-id';
+
+-- Task status by team
+SELECT team_id, status, COUNT(*) as count
+FROM team_tasks
+GROUP BY team_id, status;
+
+-- Link Teammate tool calls to team configs
+SELECT tc.timestamp, t.name, t.description
+FROM tool_calls tc
+JOIN teams t ON json_extract(tc.tool_input, '$.team_name') = t.name
+WHERE tc.tool_name = 'Teammate';
 ```
 
 ## License

@@ -3,6 +3,7 @@
 import { join } from 'path';
 import { parseArgs } from 'util';
 import { Database } from './db.ts';
+import { sync_teams } from './sync-teams.ts';
 import { sync } from './sync.ts';
 
 const DEFAULT_DB_PATH = join(Bun.env.HOME!, '.claude', 'cclog.db');
@@ -42,6 +43,8 @@ try {
 		case 'sync': {
 			console.log('Syncing transcripts...');
 			const result = await sync(db, values.verbose);
+			console.log('Syncing teams...');
+			const team_result = await sync_teams(db, values.verbose);
 			console.log(`
 Done!
   Files scanned:    ${result.files_scanned}
@@ -50,6 +53,9 @@ Done!
   Sessions found:   ${result.sessions_added}
   Tool calls:       ${result.tool_calls_added}
   Tool results:     ${result.tool_results_added}
+  Teams synced:     ${team_result.teams_synced}
+  Team members:     ${team_result.members_synced}
+  Team tasks:       ${team_result.tasks_synced}
 `);
 			break;
 		}
@@ -62,6 +68,9 @@ Database: ${db_path}
   Messages:     ${stats.messages}
   Tool calls:   ${stats.tool_calls}
   Tool results: ${stats.tool_results}
+  Teams:        ${stats.teams}
+  Team members: ${stats.team_members}
+  Team tasks:   ${stats.team_tasks}
   Tokens:
     Input:          ${stats.tokens.input?.toLocaleString() ?? 0}
     Output:         ${stats.tokens.output?.toLocaleString() ?? 0}
