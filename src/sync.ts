@@ -1,9 +1,21 @@
+import { existsSync } from 'fs';
 import { join, relative } from 'path';
 import { Database } from './db.ts';
 import { parse_file } from './parser.ts';
 
-const CLAUDE_DIR = join(Bun.env.HOME!, '.claude');
-const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+// Session directories to scan for transcripts
+// Primary: standard Claude Code location
+// Sneakpeek: temporary parallel build with unlocked features - can be removed when merged upstream
+const PROJECTS_DIRS = [
+	join(Bun.env.HOME!, '.claude', 'projects'),
+	join(
+		Bun.env.HOME!,
+		'.claude-sneakpeek',
+		'claudesp',
+		'config',
+		'projects',
+	), // TEMPORARY: github.com/mikekelly/claude-sneakpeek
+];
 
 export interface SyncResult {
 	files_scanned: number;
@@ -38,11 +50,14 @@ export async function sync(
 
 	const glob = new Bun.Glob('**/*.jsonl');
 	const files: string[] = [];
-	for await (const file of glob.scan({
-		cwd: PROJECTS_DIR,
-		absolute: true,
-	})) {
-		files.push(file);
+	for (const projects_dir of PROJECTS_DIRS) {
+		if (!existsSync(projects_dir)) continue;
+		for await (const file of glob.scan({
+			cwd: projects_dir,
+			absolute: true,
+		})) {
+			files.push(file);
+		}
 	}
 
 	result.files_scanned = files.length;
@@ -75,7 +90,7 @@ export async function sync(
 		const project_path = extract_project_path(file_path);
 
 		if (verbose) {
-			console.log(`Processing: ${relative(PROJECTS_DIR, file_path)}`);
+			console.log(`Processing: ${file_path}`);
 		}
 
 		let last_byte_offset = start_offset;
@@ -160,12 +175,17 @@ export async function sync(
 }
 
 function extract_project_path(file_path: string): string {
-	const rel = relative(PROJECTS_DIR, file_path);
-	const project_dir = rel.split('/')[0];
-
-	if (project_dir.startsWith('-')) {
-		return project_dir.slice(1).replace(/-/g, '/');
+	// Find which base dir this file belongs to
+	for (const base of PROJECTS_DIRS) {
+		if (file_path.startsWith(base)) {
+			const rel = relative(base, file_path);
+			const project_dir = rel.split('/')[0];
+			if (project_dir.startsWith('-')) {
+				return project_dir.slice(1).replace(/-/g, '/');
+			}
+			return project_dir;
+		}
 	}
-
-	return project_dir;
+	// Fallback: use filename
+	return file_path.split('/').slice(-2, -1)[0] ?? 'unknown';
 }
