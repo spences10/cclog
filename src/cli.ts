@@ -154,7 +154,9 @@ export const query = defineCommand({
 						const v = row[c];
 						if (v === null) return '';
 						const s = String(v);
-						return s.includes(',') || s.includes('"') || s.includes('\n')
+						return s.includes(',') ||
+							s.includes('"') ||
+							s.includes('\n')
 							? `"${s.replace(/"/g, '""')}"`
 							: s;
 					});
@@ -165,18 +167,26 @@ export const query = defineCommand({
 				const widths = columns.map((c) =>
 					Math.max(
 						c.length,
-						...rows.map((r) => String(r[c] ?? '').slice(0, 50).length),
+						...rows.map(
+							(r) => String(r[c] ?? '').slice(0, 50).length,
+						),
 					),
 				);
 
-				const header = columns.map((c, i) => c.padEnd(widths[i])).join(' | ');
+				const header = columns
+					.map((c, i) => c.padEnd(widths[i]))
+					.join(' | ');
 				const sep = widths.map((w) => '-'.repeat(w)).join('-+-');
 
 				console.log(header);
 				console.log(sep);
 				for (const row of rows) {
 					const line = columns
-						.map((c, i) => String(row[c] ?? '').slice(0, 50).padEnd(widths[i]))
+						.map((c, i) =>
+							String(row[c] ?? '')
+								.slice(0, 50)
+								.padEnd(widths[i]),
+						)
 						.join(' | ');
 					console.log(line);
 				}
