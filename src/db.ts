@@ -561,7 +561,9 @@ export class Database {
 		}>;
 	}
 
-	get_tool_stats(options: { limit?: number; project?: string } = {}): Array<{
+	get_tool_stats(
+		options: { limit?: number; project?: string } = {},
+	): Array<{
 		tool_name: string;
 		count: number;
 		percentage: number;

@@ -325,7 +325,9 @@ describe('Database', () => {
 		test('filters by project', () => {
 			const stats = db.get_tool_stats({ project: 'project-alpha' });
 			expect(stats.length).toBe(2);
-			expect(stats.find((s) => s.tool_name === 'Edit')).toBeUndefined();
+			expect(
+				stats.find((s) => s.tool_name === 'Edit'),
+			).toBeUndefined();
 		});
 
 		test('returns empty array when no tool calls', () => {

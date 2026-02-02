@@ -258,7 +258,9 @@ export const tools = defineCommand({
 			console.log(
 				`${'Tool'.padEnd(maxNameLen)}  ${'Count'.padStart(maxCountLen)}  %`,
 			);
-			console.log(`${'-'.repeat(maxNameLen)}  ${'-'.repeat(maxCountLen)}  ------`);
+			console.log(
+				`${'-'.repeat(maxNameLen)}  ${'-'.repeat(maxCountLen)}  ------`,
+			);
 
 			for (const r of results) {
 				console.log(
