@@ -1,5 +1,5 @@
 ---
-"ccrecall": patch
+'ccrecall': patch
 ---
 
 Add `query` command for raw SQL queries
