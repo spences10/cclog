@@ -19,26 +19,29 @@ CREATE TABLE memory_embeddings (
 CREATE INDEX idx_memory_embeddings_vec ON memory_embeddings(embedding);
 ```
 
-### Embedding Providers
+### Embedding Providers (Local Only - No API Keys)
 
-**Local (preferred for privacy):**
+**Design principle:** Zero external API dependencies. Users should not need to configure API keys.
 
-- GGUF models via llama.cpp bindings
-- all-MiniLM-L6-v2 (384 dimensions, fast)
-- nomic-embed-text (768 dimensions, better quality)
+**Local GGUF models:**
 
-**API-based:**
+- all-MiniLM-L6-v2 (384 dimensions, ~25MB, fast)
+- nomic-embed-text (768 dimensions, ~100MB, better quality)
+- bge-small-en (384 dimensions, ~45MB, good balance)
 
-- OpenAI `text-embedding-3-small` (1536 dimensions)
-- Google `text-embedding-004` (768 dimensions)
-- Voyage AI for code-specific embeddings
+**How it works:**
+
+- First run auto-downloads model to `~/.ccrecall/models/`
+- Embeddings computed locally via llama.cpp bindings
+- No network calls, no API keys, no costs
 
 **Config:**
 
 ```bash
-cclog config set embedding.provider local
-cclog config set embedding.model all-MiniLM-L6-v2
+ccrecall config set embedding.model all-MiniLM-L6-v2
 ```
+
+**Note:** API-based providers intentionally not supported to keep setup frictionless.
 
 ---
 

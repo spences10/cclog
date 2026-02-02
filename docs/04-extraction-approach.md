@@ -86,21 +86,25 @@ Marker auto-cleaned on terminal close (temp dir cleared).
 
 ---
 
-## Background Task Spawning
+## Background Task Spawning (Uses Existing Claude Tokens)
 
 Use Claude Code's Task tool with background execution:
 
 ```
 Task tool call:
-  prompt: "Extract memories from unprocessed cclog sessions"
+  prompt: "Extract memories from unprocessed ccrecall sessions"
   run_in_background: true
 ```
 
-This pattern:
+**Key insight: No separate API keys required.**
+
+The extraction runs within the user's active Claude Code session, using their existing Pro/Max subscription tokens. This means:
 
 - Returns immediately to user
 - Background task runs async
 - No blocking on long extractions
+- No additional API keys to configure
+- No separate billing - uses existing Claude subscription
 - Works within Claude Code's existing infrastructure
 
 ---

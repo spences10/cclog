@@ -166,15 +166,16 @@ OpenClaw session logs use JSONL
 **cclog approach**: SQLite for both sessions and memories, linked via
 `session_id`.
 
-### 3. Complex Provider Chain
+### 3. External API Dependencies
 
-OpenClaw's Local -> OpenAI -> Gemini fallback chain is overkill for
-v1.
+OpenClaw requires separate API keys for embeddings (OpenAI/Gemini).
 
-**cclog simplification**:
+**ccrecall approach: Zero API keys required**
 
-- Start with OpenAI embeddings only
-- Add local/other providers later as optional
+- Extraction uses Claude Code's existing session (user's Pro/Max tokens)
+- Embeddings use local GGUF models (optional, for semantic search)
+- All computation happens locally or via existing Claude subscription
+- No additional accounts or API keys to configure
 
 ### 4. Real-time File Watching
 
