@@ -1,5 +1,13 @@
 # ccrecall
 
+## 0.0.5
+
+### Patch Changes
+
+- e3dac4c: Add `query` command for raw SQL queries
+- fcdddb9: Add `sessions` command to list recent sessions
+- c8e5c3f: Add `tools` command for tool usage stats
+
 ## 0.0.4
 
 ### Patch Changes
