@@ -1,5 +1,12 @@
 # ccrecall
 
+## 0.0.4
+
+### Patch Changes
+
+- 3bc47bb: rename to ccrecall
+- 8c1e3f5: use citty for cli
+
 ## 0.0.3
 
 ### Patch Changes
