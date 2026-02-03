@@ -1,5 +1,12 @@
 # ccrecall
 
+## 0.0.6
+
+### Patch Changes
+
+- 1cf71ca: Fix FTS5 search failing with special characters (/, -, :,
+  etc.) in query
+
 ## 0.0.5
 
 ### Patch Changes
