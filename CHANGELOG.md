@@ -1,5 +1,12 @@
 # ccrecall
 
+## 0.0.7
+
+### Patch Changes
+
+- aedba94: Fix FTS5 search failing with period (.) and plus (+) in
+  query
+
 ## 0.0.6
 
 ### Patch Changes
