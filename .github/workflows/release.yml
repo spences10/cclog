@@ -13,10 +13,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubicloud-standard-2
+          - os: ubuntu-latest
             target: bun-linux-x64
             artifact: ccrecall-linux-x64
-          - os: ubicloud-standard-2-arm
+          - os: ubuntu-24.04-arm
             target: bun-linux-arm64
             artifact: ccrecall-linux-arm64
           - os: macos-latest
@@ -53,7 +53,7 @@ jobs:
 
   release:
     needs: build
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/download-artifact@v7
