@@ -36,6 +36,9 @@
 		"context",
 		"recall"
 	],
+	"engines": {
+		"bun": ">=1.0.0"
+	},
 	"license": "MIT",
 	"dependencies": {
 		"citty": "^0.2.0"

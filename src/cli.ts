@@ -280,7 +280,7 @@ export const search = defineCommand({
 	},
 	args: {
 		...sharedArgs,
-		term: {
+		_: {
 			type: 'positional' as const,
 			description:
 				'Search term (supports FTS5 syntax: AND, OR, NOT, "phrase", prefix*)',
@@ -313,7 +313,16 @@ export const search = defineCommand({
 				db.rebuild_fts();
 			}
 
-			const results = db.search(args.term, {
+			const raw_term = args._ as string | string[];
+			const term = Array.isArray(raw_term)
+				? raw_term.join(' ')
+				: raw_term;
+			if (!term) {
+				console.log('No search term provided.');
+				return;
+			}
+
+			const results = db.search(term, {
 				limit: args.limit ? parseInt(args.limit, 10) : undefined,
 				project: args.project,
 			});
