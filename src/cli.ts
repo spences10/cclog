@@ -175,9 +175,7 @@ export const query = defineCommand({
 						maxColWidth,
 						Math.max(
 							c.length,
-							...rows.map(
-								(r) => String(r[c] ?? '').length,
-							),
+							...rows.map((r) => String(r[c] ?? '').length),
 						),
 					),
 				);
