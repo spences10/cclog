@@ -1,5 +1,12 @@
 # ccrecall
 
+## 0.0.9
+
+### Patch Changes
+
+- c6c21df: Fix tool stats percentage calculation to use total
+  tool_calls count instead of only the displayed rows
+
 ## 0.0.8
 
 ### Patch Changes
