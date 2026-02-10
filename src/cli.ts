@@ -484,13 +484,14 @@ export const sessions = defineCommand({
 
 			// Table format
 			console.log(
-				'Date       | Project                          | Msgs | Tokens    | Duration',
+				'ID       | Date       | Project                          | Msgs | Tokens    | Duration',
 			);
 			console.log(
-				'-----------|----------------------------------|------|-----------|----------',
+				'---------|------------|----------------------------------|------|-----------|----------',
 			);
 
 			for (const s of results) {
+				const id = s.id.slice(0, 8);
 				const date = new Date(s.first_timestamp)
 					.toISOString()
 					.split('T')[0];
@@ -505,7 +506,7 @@ export const sessions = defineCommand({
 				const duration =
 					s.duration_mins > 0 ? `${s.duration_mins}m` : '<1m';
 				console.log(
-					`${date} | ${project} | ${msgs} | ${tokens} | ${duration.padStart(8)}`,
+					`${id} | ${date} | ${project} | ${msgs} | ${tokens} | ${duration.padStart(8)}`,
 				);
 			}
 		} finally {
