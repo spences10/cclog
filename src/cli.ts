@@ -303,6 +303,12 @@ export const search = defineCommand({
 			alias: 'p',
 			description: 'Filter by project path',
 		},
+		context: {
+			type: 'string',
+			alias: 'c',
+			description:
+				'Show N messages before/after each match (default: 0)',
+		},
 		rebuild: {
 			type: 'boolean',
 			description: 'Rebuild FTS index before searching',
@@ -339,16 +345,84 @@ export const search = defineCommand({
 				return;
 			}
 
-			console.log(`Found ${results.length} matches:\n`);
+			const context_count = args.context
+				? parseInt(args.context, 10)
+				: 0;
+
+			// Group results by session
+			const grouped = new Map<
+				string,
+				{
+					project_path: string;
+					first_timestamp: number;
+					matches: typeof results;
+				}
+			>();
 
 			for (const r of results) {
-				const date = new Date(r.timestamp)
+				let group = grouped.get(r.session_id);
+				if (!group) {
+					group = {
+						project_path: r.project_path,
+						first_timestamp: r.timestamp,
+						matches: [],
+					};
+					grouped.set(r.session_id, group);
+				}
+				group.matches.push(r);
+				if (r.timestamp < group.first_timestamp) {
+					group.first_timestamp = r.timestamp;
+				}
+			}
+
+			console.log(
+				`Found ${results.length} matches across ${grouped.size} session(s):\n`,
+			);
+
+			for (const [session_id, group] of grouped) {
+				const date = new Date(group.first_timestamp)
 					.toISOString()
 					.split('T')[0];
-				const project = r.project_path.split('/').slice(-2).join('/');
-				console.log(`[${date}] ${project}`);
-				console.log(`  ${r.snippet.replace(/\n/g, ' ')}`);
-				console.log(`  session: ${r.session_id.slice(0, 8)}...\n`);
+				const project = group.project_path
+					.split('/')
+					.slice(-2)
+					.join('/');
+				console.log(
+					`--- ${session_id.slice(0, 8)} | ${date} | ${project} (${group.matches.length} match${group.matches.length === 1 ? '' : 'es'}) ---`,
+				);
+
+				for (const r of group.matches) {
+					console.log(`  ${r.snippet.replace(/\n/g, ' ')}`);
+
+					if (context_count > 0) {
+						const ctx = db.get_messages_around(
+							r.session_id,
+							r.timestamp,
+							context_count,
+						);
+
+						for (const m of ctx.before) {
+							const preview = (m.content_text ?? '')
+								.replace(/\n/g, ' ')
+								.slice(0, 80);
+							console.log(
+								`    [${m.type}] ${preview}${preview.length >= 80 ? '...' : ''}`,
+							);
+						}
+
+						console.log(`    >>> match <<<`);
+
+						for (const m of ctx.after) {
+							const preview = (m.content_text ?? '')
+								.replace(/\n/g, ' ')
+								.slice(0, 80);
+							console.log(
+								`    [${m.type}] ${preview}${preview.length >= 80 ? '...' : ''}`,
+							);
+						}
+					}
+				}
+				console.log();
 			}
 		} finally {
 			db.close();

@@ -536,6 +536,57 @@ export class Database {
 		}>;
 	}
 
+	get_messages_around(
+		session_id: string,
+		timestamp: number,
+		count: number,
+	): {
+		before: Array<{
+			uuid: string;
+			type: string;
+			content_text: string;
+			timestamp: number;
+		}>;
+		after: Array<{
+			uuid: string;
+			type: string;
+			content_text: string;
+			timestamp: number;
+		}>;
+	} {
+		const before = this.db
+			.prepare(
+				`SELECT uuid, type, content_text, timestamp
+				FROM messages
+				WHERE session_id = ? AND timestamp < ?
+				ORDER BY timestamp DESC
+				LIMIT ?`,
+			)
+			.all(session_id, timestamp, count) as Array<{
+			uuid: string;
+			type: string;
+			content_text: string;
+			timestamp: number;
+		}>;
+
+		const after = this.db
+			.prepare(
+				`SELECT uuid, type, content_text, timestamp
+				FROM messages
+				WHERE session_id = ? AND timestamp > ?
+				ORDER BY timestamp ASC
+				LIMIT ?`,
+			)
+			.all(session_id, timestamp, count) as Array<{
+			uuid: string;
+			type: string;
+			content_text: string;
+			timestamp: number;
+		}>;
+
+		return { before: before.reverse(), after };
+	}
+
 	rebuild_fts() {
 		this.db.run(
 			`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`,
