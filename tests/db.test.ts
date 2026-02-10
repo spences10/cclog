@@ -198,6 +198,104 @@ describe('Database', () => {
 		});
 	});
 
+	describe('get_messages_around', () => {
+		const now = Date.now();
+
+		beforeEach(() => {
+			db.upsert_session({
+				id: 'session-ctx',
+				project_path: '/test/project',
+				timestamp: now - 5000,
+			});
+
+			// Insert 5 messages with sequential timestamps
+			for (let i = 0; i < 5; i++) {
+				db.insert_message({
+					uuid: `ctx-msg-${i}`,
+					session_id: 'session-ctx',
+					type: i % 2 === 0 ? 'human' : 'assistant',
+					content_text: `Message number ${i}`,
+					timestamp: now - (4 - i) * 1000, // oldest first
+				});
+			}
+
+			// Another session to ensure isolation
+			db.upsert_session({
+				id: 'session-other',
+				project_path: '/test/other',
+				timestamp: now,
+			});
+			db.insert_message({
+				uuid: 'other-msg',
+				session_id: 'session-other',
+				type: 'human',
+				content_text: 'Other session message',
+				timestamp: now - 2000,
+			});
+		});
+
+		test('returns messages before and after timestamp', () => {
+			// Target the middle message (index 2, timestamp = now - 2000)
+			const target_ts = now - 2000;
+			const ctx = db.get_messages_around('session-ctx', target_ts, 2);
+			expect(ctx.before.length).toBe(2);
+			expect(ctx.after.length).toBe(2);
+		});
+
+		test('before messages are in chronological order', () => {
+			const target_ts = now - 2000;
+			const ctx = db.get_messages_around('session-ctx', target_ts, 2);
+			expect(ctx.before[0].timestamp).toBeLessThan(
+				ctx.before[1].timestamp,
+			);
+		});
+
+		test('after messages are in chronological order', () => {
+			const target_ts = now - 2000;
+			const ctx = db.get_messages_around('session-ctx', target_ts, 2);
+			expect(ctx.after[0].timestamp).toBeLessThan(
+				ctx.after[1].timestamp,
+			);
+		});
+
+		test('respects count limit', () => {
+			const target_ts = now - 2000;
+			const ctx = db.get_messages_around('session-ctx', target_ts, 1);
+			expect(ctx.before.length).toBe(1);
+			expect(ctx.after.length).toBe(1);
+		});
+
+		test('does not include messages from other sessions', () => {
+			const target_ts = now - 2000;
+			const ctx = db.get_messages_around(
+				'session-ctx',
+				target_ts,
+				10,
+			);
+			const all_uuids = [
+				...ctx.before.map((m) => m.uuid),
+				...ctx.after.map((m) => m.uuid),
+			];
+			expect(all_uuids).not.toContain('other-msg');
+		});
+
+		test('returns empty arrays when no context available', () => {
+			const ctx = db.get_messages_around(
+				'session-ctx',
+				now + 9999,
+				5,
+			);
+			expect(ctx.before.length).toBe(5); // all messages are before
+			expect(ctx.after.length).toBe(0);
+		});
+
+		test('handles nonexistent session', () => {
+			const ctx = db.get_messages_around('nonexistent', now, 5);
+			expect(ctx.before).toEqual([]);
+			expect(ctx.after).toEqual([]);
+		});
+	});
+
 	describe('get_sessions', () => {
 		beforeEach(() => {
 			const now = Date.now();
