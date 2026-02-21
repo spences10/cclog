@@ -132,6 +132,16 @@ describe('Database', () => {
 			expect(results[0].snippet).toContain('<<<');
 		});
 
+		test('search returns relevance scores', () => {
+			const results = db.search('authentication');
+			expect(results.length).toBeGreaterThan(0);
+			for (const r of results) {
+				expect(typeof r.relevance).toBe('number');
+				// BM25 returns negative values, lower = more relevant
+				expect(r.relevance).toBeLessThanOrEqual(0);
+			}
+		});
+
 		test('can filter by project', () => {
 			const results = db.search('authentication', {
 				project: 'project-alpha',
@@ -191,6 +201,74 @@ describe('Database', () => {
 			const results = db.search("don't");
 			expect(results.length).toBe(1);
 			expect(results[0].content_text).toContain("don't");
+		});
+
+		test('can search thinking content', () => {
+			db.insert_message({
+				uuid: 'msg-thinking',
+				session_id: 'session-1',
+				type: 'assistant',
+				content_text: 'Here is the solution',
+				thinking:
+					'The user needs help with the fibonacci sequence algorithm',
+				timestamp: Date.now() - 300,
+			});
+
+			const results = db.search('fibonacci');
+			expect(results.length).toBe(1);
+			expect(results[0].uuid).toBe('msg-thinking');
+		});
+
+		test('content_text weighted higher than thinking', () => {
+			db.insert_message({
+				uuid: 'msg-content-match',
+				session_id: 'session-1',
+				type: 'assistant',
+				content_text: 'Sorting algorithm performance comparison',
+				timestamp: Date.now() - 200,
+			});
+
+			db.insert_message({
+				uuid: 'msg-thinking-match',
+				session_id: 'session-1',
+				type: 'assistant',
+				content_text: 'Here is my answer',
+				thinking: 'Sorting algorithm analysis',
+				timestamp: Date.now() - 100,
+			});
+
+			const results = db.search('sorting algorithm');
+			expect(results.length).toBe(2);
+			// Content match should rank higher (more negative BM25 score)
+			expect(results[0].uuid).toBe('msg-content-match');
+		});
+
+		test('sort by time descending', () => {
+			const results = db.search('authentication', { sort: 'time' });
+			expect(results.length).toBe(2);
+			expect(results[0].timestamp).toBeGreaterThanOrEqual(
+				results[1].timestamp,
+			);
+		});
+
+		test('sort by time ascending', () => {
+			const results = db.search('authentication', {
+				sort: 'time-asc',
+			});
+			expect(results.length).toBe(2);
+			expect(results[0].timestamp).toBeLessThanOrEqual(
+				results[1].timestamp,
+			);
+		});
+
+		test('sort by relevance is default', () => {
+			const default_results = db.search('authentication');
+			const explicit_results = db.search('authentication', {
+				sort: 'relevance',
+			});
+			expect(default_results.map((r) => r.uuid)).toEqual(
+				explicit_results.map((r) => r.uuid),
+			);
 		});
 
 		test('rebuild_fts does not throw', () => {
