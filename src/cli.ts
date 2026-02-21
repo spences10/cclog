@@ -323,8 +323,7 @@ export const search = defineCommand({
 		sort: {
 			type: 'string',
 			alias: 's',
-			description:
-				'Sort order: relevance (default), time, time-asc',
+			description: 'Sort order: relevance (default), time, time-asc',
 		},
 	},
 	async run({ args }) {
