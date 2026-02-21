@@ -411,9 +411,8 @@ export const search = defineCommand({
 
 				for (const r of group.matches) {
 					const score = r.relevance.toFixed(2);
-					console.log(
-						`  [${score}] ${r.snippet.replace(/\n/g, ' ')}`,
-					);
+					const snippet = (r.snippet ?? '').replace(/\n/g, ' ');
+					console.log(`  [${score}] ${snippet}`);
 
 					if (context_count > 0) {
 						const ctx = db.get_messages_around(

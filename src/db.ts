@@ -543,7 +543,10 @@ export class Database {
 				s.project_path,
 				m.content_text,
 				m.timestamp,
-				snippet(messages_fts, 0, '>>>', '<<<', '...', 32) as snippet,
+				COALESCE(
+					snippet(messages_fts, 0, '>>>', '<<<', '...', 32),
+					snippet(messages_fts, 1, '>>>', '<<<', '...', 32)
+				) as snippet,
 				bm25(messages_fts, 10.0, 1.0) as relevance
 			FROM messages_fts
 			JOIN messages m ON m.rowid = messages_fts.rowid
