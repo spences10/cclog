@@ -320,6 +320,11 @@ export const search = defineCommand({
 			type: 'boolean',
 			description: 'Rebuild FTS index before searching',
 		},
+		sort: {
+			type: 'string',
+			alias: 's',
+			description: 'Sort order: relevance (default), time, time-asc',
+		},
 	},
 	async run({ args }) {
 		const { Database } = await import('./db.ts');
@@ -342,9 +347,15 @@ export const search = defineCommand({
 				return;
 			}
 
+			const sort_val = args.sort as
+				| 'relevance'
+				| 'time'
+				| 'time-asc'
+				| undefined;
 			const results = db.search(term, {
 				limit: args.limit ? parseInt(args.limit, 10) : undefined,
 				project: args.project,
+				sort: sort_val,
 			});
 
 			if (results.length === 0) {
@@ -399,7 +410,9 @@ export const search = defineCommand({
 				);
 
 				for (const r of group.matches) {
-					console.log(`  ${r.snippet.replace(/\n/g, ' ')}`);
+					const score = r.relevance.toFixed(2);
+					const snippet = (r.snippet ?? '').replace(/\n/g, ' ');
+					console.log(`  [${score}] ${snippet}`);
 
 					if (context_count > 0) {
 						const ctx = db.get_messages_around(

@@ -120,25 +120,26 @@ CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
 CREATE INDEX IF NOT EXISTS idx_team_tasks_team ON team_tasks(team_id);
 CREATE INDEX IF NOT EXISTS idx_team_tasks_status ON team_tasks(status);
 
--- FTS5 full-text search index for messages
+-- FTS5 full-text search index for messages (content_text + thinking)
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   content_text,
+  thinking,
   content='messages',
   content_rowid='rowid'
 );
 
 -- Triggers to keep FTS index in sync with messages table
 CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
-  INSERT INTO messages_fts(rowid, content_text) VALUES (new.rowid, new.content_text);
+  INSERT INTO messages_fts(rowid, content_text, thinking) VALUES (new.rowid, new.content_text, new.thinking);
 END;
 
 CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
-  INSERT INTO messages_fts(messages_fts, rowid, content_text) VALUES('delete', old.rowid, old.content_text);
+  INSERT INTO messages_fts(messages_fts, rowid, content_text, thinking) VALUES('delete', old.rowid, old.content_text, old.thinking);
 END;
 
 CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE ON messages BEGIN
-  INSERT INTO messages_fts(messages_fts, rowid, content_text) VALUES('delete', old.rowid, old.content_text);
-  INSERT INTO messages_fts(rowid, content_text) VALUES (new.rowid, new.content_text);
+  INSERT INTO messages_fts(messages_fts, rowid, content_text, thinking) VALUES('delete', old.rowid, old.content_text, old.thinking);
+  INSERT INTO messages_fts(rowid, content_text, thinking) VALUES (new.rowid, new.content_text, new.thinking);
 END;
 `;
 
@@ -184,6 +185,7 @@ export class Database {
 		migrate_legacy_db(db_path);
 		this.db = new BunDB(db_path);
 		this.db.run('PRAGMA foreign_keys = ON');
+		this._migrate_fts_schema();
 		this.db.run(SCHEMA);
 
 		this.stmt_upsert_session = this.db.prepare(`
@@ -248,6 +250,31 @@ export class Database {
 				owner_name = COALESCE(excluded.owner_name, owner_name),
 				completed_at = COALESCE(excluded.completed_at, completed_at)
 		`);
+	}
+
+	/** Drop old single-column FTS table + triggers so SCHEMA can recreate with thinking column */
+	private _migrate_fts_schema() {
+		const fts_exists = this.db
+			.prepare(
+				`SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages_fts'`,
+			)
+			.get();
+		if (!fts_exists) return;
+
+		// Check if FTS already has the thinking column
+		const fts_sql = this.db
+			.prepare(
+				`SELECT sql FROM sqlite_master WHERE type='table' AND name='messages_fts'`,
+			)
+			.get() as { sql: string } | undefined;
+		if (fts_sql?.sql?.includes('thinking')) return;
+
+		// Drop old FTS table and triggers, SCHEMA will recreate them
+		this.db.run('DROP TRIGGER IF EXISTS messages_fts_insert');
+		this.db.run('DROP TRIGGER IF EXISTS messages_fts_delete');
+		this.db.run('DROP TRIGGER IF EXISTS messages_fts_update');
+		this.db.run('DROP TABLE IF EXISTS messages_fts');
+		console.log('Migrated FTS index: added thinking column');
 	}
 
 	begin() {
@@ -493,7 +520,11 @@ export class Database {
 
 	search(
 		term: string,
-		options: { limit?: number; project?: string } = {},
+		options: {
+			limit?: number;
+			project?: string;
+			sort?: 'relevance' | 'time' | 'time-asc';
+		} = {},
 	): Array<{
 		uuid: string;
 		session_id: string;
@@ -501,8 +532,10 @@ export class Database {
 		content_text: string;
 		timestamp: number;
 		snippet: string;
+		relevance: number;
 	}> {
 		const limit = options.limit ?? 20;
+		const sort = options.sort ?? 'relevance';
 		let query = `
 			SELECT
 				m.uuid,
@@ -510,7 +543,11 @@ export class Database {
 				s.project_path,
 				m.content_text,
 				m.timestamp,
-				snippet(messages_fts, 0, '>>>', '<<<', '...', 32) as snippet
+				COALESCE(
+					snippet(messages_fts, 0, '>>>', '<<<', '...', 32),
+					snippet(messages_fts, 1, '>>>', '<<<', '...', 32)
+				) as snippet,
+				bm25(messages_fts, 10.0, 1.0) as relevance
 			FROM messages_fts
 			JOIN messages m ON m.rowid = messages_fts.rowid
 			JOIN sessions s ON s.id = m.session_id
@@ -523,7 +560,15 @@ export class Database {
 			params.push(`%${options.project}%`);
 		}
 
-		query += ` ORDER BY rank LIMIT ?`;
+		if (sort === 'time') {
+			query += ` ORDER BY m.timestamp DESC`;
+		} else if (sort === 'time-asc') {
+			query += ` ORDER BY m.timestamp ASC`;
+		} else {
+			query += ` ORDER BY relevance`;
+		}
+
+		query += ` LIMIT ?`;
 		params.push(limit);
 
 		return this.db.prepare(query).all(...params) as Array<{
@@ -533,6 +578,7 @@ export class Database {
 			content_text: string;
 			timestamp: number;
 			snippet: string;
+			relevance: number;
 		}>;
 	}
 
